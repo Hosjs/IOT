@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP8266 Control Panel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 50px;
+            max-width: 900px;
+            margin: 50px auto;
+        }
+        .section {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 45%;
+        }
+        h1 {
+            text-align: center;
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        ul li {
+            padding: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>ESP8266 Control Panel</h1>
+    <div class="container">
+        <div class="section">
+            <h2>Recieved History</h2>
+            <div class="history-controls">
+                <button onclick="clearHistory()">Clear History</button>
+            </div>
+            <ul id="history"></ul>
+        </div>
+
+        <div class="section">
+            <h2>LED Control</h2>
+            <p id="status">Status: Disconnected</p>
+            <button onclick="toggleLED('ON')">Turn ON</button>
+            <button onclick="toggleLED('OFF')">Turn OFF</button>
+            <h2>Sensor Data</h2>
+            <p id="sensorData">Temperature: --°C, Humidity: --%</p>
+        </div>
+    </div>
+
+    <script>
+        var socket = new WebSocket('ws://192.168.1.137:81/');
+        socket.onopen = function() {
+            document.getElementById('status').innerText = 'Status: Connected';
+        };
+        socket.onclose = function() {
+            document.getElementById('status').innerText = 'Status: Disconnected';
+        };
+
+        socket.onmessage = function(event) {
+            var data = event.data;
+            document.getElementById('sensorData').innerText = data;
+            addHistory(data);
+        };
+
+        function toggleLED(state) {
+            socket.send(state);
+            addHistory('LED ' + state + ' at ' + new Date().toLocaleString());
+        }
+
+
+        function addHistory(entry) {
+            fetch('/api/history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ entry: entry })
+            })
+            .then(() => displayHistory())
+            .catch(error => console.error('Error:', error));
+        }
+
+        function displayHistory() {
+            fetch('/api/history')
+                .then(response => response.json())
+                .then(data => {
+                    const historyList = document.getElementById('history');
+                    historyList.innerHTML = '';
+                    data.forEach(item => {
+                        const li = document.createElement('li');
+                        li.textContent = `${item.entry} (Timestamp: ${item.timestamp})`;
+                        historyList.appendChild(li);
+                    });
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function clearHistory() {
+            fetch('/api/history', { method: 'DELETE' })
+                .then(() => displayHistory())
+                .catch(error => console.error('Error:', error));
+        }
+
+        displayHistory();
+    </script>
+</body>
+</html>
